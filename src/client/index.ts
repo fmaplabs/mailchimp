@@ -97,8 +97,7 @@ export class MailchimpTransactional {
     public component: ComponentApi,
     options?: MailchimpTransactionalOptions,
   ) {
-    this.apiKey =
-      options?.apiKey ?? process.env.MANDRILL_API_KEY ?? "";
+    this.apiKey = options?.apiKey ?? process.env.MANDRILL_API_KEY ?? "";
     this.webhookKey =
       options?.webhookKey ?? process.env.MANDRILL_WEBHOOK_KEY ?? "";
     this.initialBackoffMs = options?.initialBackoffMs ?? 30000;
@@ -106,15 +105,17 @@ export class MailchimpTransactional {
     this.onEmailEventRef = options?.onEmailEvent;
   }
 
-  private async getRuntimeConfig(
-    ctx: RunMutationCtx,
-  ): Promise<RuntimeConfig> {
+  private async getRuntimeConfig(ctx: RunMutationCtx): Promise<RuntimeConfig> {
     if (this.cachedRuntimeConfig) return this.cachedRuntimeConfig;
 
     let onEmailEvent: { fnHandle: string } | undefined;
     if (this.onEmailEventRef) {
       const handle = await (
-        ctx as unknown as { getFunctionHandle: (ref: FunctionReference<"mutation", "internal">) => Promise<string> }
+        ctx as unknown as {
+          getFunctionHandle: (
+            ref: FunctionReference<"mutation", "internal">,
+          ) => Promise<string>;
+        }
       ).getFunctionHandle(this.onEmailEventRef);
       onEmailEvent = { fnHandle: handle };
     }
@@ -162,7 +163,10 @@ export class MailchimpTransactional {
 
   async sendEmailManually(
     ctx: RunMutationCtx,
-    options: Pick<SendEmailOptions, "from_email" | "from_name" | "to" | "subject">,
+    options: Pick<
+      SendEmailOptions,
+      "from_email" | "from_name" | "to" | "subject"
+    >,
     callback: (emailId: EmailId) => Promise<{
       mandrillId?: string;
       status: Status;
@@ -196,10 +200,7 @@ export class MailchimpTransactional {
     return emailId;
   }
 
-  async cancelEmail(
-    ctx: RunMutationCtx,
-    emailId: EmailId,
-  ): Promise<void> {
+  async cancelEmail(ctx: RunMutationCtx, emailId: EmailId): Promise<void> {
     await ctx.runMutation(this.component.lib.cancelEmail, {
       emailId: emailId as unknown as string,
     });
@@ -214,10 +215,7 @@ export class MailchimpTransactional {
     });
   }
 
-  async get(
-    ctx: RunQueryCtx,
-    emailId: EmailId,
-  ) {
+  async get(ctx: RunQueryCtx, emailId: EmailId) {
     return await ctx.runQuery(this.component.lib.get, {
       emailId: emailId as unknown as string,
     });

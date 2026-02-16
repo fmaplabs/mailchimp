@@ -1,88 +1,21 @@
-# Convex Component Template
+# @fmaplabs/mailchimp
 
-This is a Convex component, ready to be published on npm.
+Transactional email for [Convex](https://convex.dev) via Mailchimp/Mandrill.
 
-To create your own component:
+[![npm version](https://badge.fury.io/js/@fmaplabs%2Fmailchimp.svg)](https://www.npmjs.com/package/@fmaplabs/mailchimp)
 
-1. Write code in src/component for your component. Component-specific tables,
-   queries, mutations, and actions go here.
-1. Write code in src/client for the Class that interfaces with the component.
-   This is the bridge your users will access to get information into and out of
-   your component
-1. Write example usage in example/convex/example.ts.
-1. Delete the text in this readme until `---` and flesh out the README.
-1. Publish to npm with `npm run alpha` or `npm run release`.
+## Quick Start
 
-To develop your component run a dev process in the example project:
+Install the package:
 
 ```sh
-npm i
-npm run dev
+npm install @fmaplabs/mailchimp
 ```
 
-`npm i` will do the install and an initial build. `npm run dev` will start a
-file watcher to re-build the component, as well as the example project frontend
-and backend, which does codegen and installs the component.
+Set the `MANDRILL_API_KEY` environment variable in your
+[Convex dashboard](https://dashboard.convex.dev) (Settings → Environment Variables).
 
-Modify the schema and index files in src/component/ to define your component.
-
-Write a client for using this component in src/client/index.ts.
-
-If you won't be adding frontend code (e.g. React components) to this component
-you can delete "./react" references in package.json and "src/react/" directory.
-If you will be adding frontend code, add a peer dependency on React in
-package.json.
-
-### Component Directory structure
-
-```
-.
-├── README.md           documentation of your component
-├── package.json        component name, version number, other metadata
-├── package-lock.json   Components are like libraries, package-lock.json
-│                       is .gitignored and ignored by consumers.
-├── src
-│   ├── component/
-│   │   ├── _generated/ Files here are generated for the component.
-│   │   ├── convex.config.ts  Name your component here and use other components
-│   │   ├── lib.ts    Define functions here and in new files in this directory
-│   │   └── schema.ts   schema specific to this component
-│   ├── client/
-│   │   └── index.ts    Code that needs to run in the app that uses the
-│   │                   component. Generally the app interacts directly with
-│   │                   the component's exposed API (src/component/*).
-│   └── react/          Code intended to be used on the frontend goes here.
-│       │               Your are free to delete this if this component
-│       │               does not provide code.
-│       └── index.ts
-├── example/            example Convex app that uses this component
-│   └── convex/
-│       ├── _generated/       Files here are generated for the example app.
-│       ├── convex.config.ts  Imports and uses this component
-│       ├── myFunctions.ts    Functions that use the component
-│       └── schema.ts         Example app schema
-└── dist/               Publishing artifacts will be created here.
-```
-
----
-
-# Convex Mailchimp
-
-[![npm version](https://badge.fury.io/js/@example%2Fmailchimp.svg)](https://badge.fury.io/js/@example%2Fmailchimp)
-
-<!-- START: Include on https://convex.dev/components -->
-
-- [ ] What is some compelling syntax as a hook?
-- [ ] Why should you use this component?
-- [ ] Links to docs / other resources?
-
-Found a bug? Feature request?
-[File it here](https://github.com/fmaplabs/mailchimp/issues).
-
-## Installation
-
-Create a `convex.config.ts` file in your app's `convex/` folder and install the
-component by calling `use`:
+Register the component in `convex/convex.config.ts`:
 
 ```ts
 // convex/convex.config.ts
@@ -95,52 +28,201 @@ app.use(mailchimp);
 export default app;
 ```
 
-## Usage
+Send an email:
 
 ```ts
+import { mutation } from "./_generated/server";
 import { components } from "./_generated/api";
+import { MailchimpTransactional } from "@fmaplabs/mailchimp";
+import { v } from "convex/values";
 
-export const addComment = mutation({
-  args: { text: v.string(), targetId: v.string() },
+const mailchimp = new MailchimpTransactional(components.mailchimp);
+
+export const sendWelcome = mutation({
+  args: { email: v.string(), name: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.runMutation(components.mailchimp.lib.add, {
-      text: args.text,
-      targetId: args.targetId,
-      userId: await getAuthUserId(ctx),
+    return await mailchimp.sendEmail(ctx, {
+      from_email: "hello@example.com",
+      from_name: "My App",
+      to: [{ email: args.email, name: args.name }],
+      subject: `Welcome, ${args.name}!`,
+      html: "<h1>Welcome!</h1><p>We're glad you're here.</p>",
     });
   },
 });
 ```
 
-See more example usage in [example.ts](./example/convex/example.ts).
+## How-To Guide
 
-### HTTP Routes
+### Send an HTML email
 
-You can register HTTP routes for the component to expose HTTP endpoints:
+Pass `html` (and optionally `text` as a plain-text fallback) to `sendEmail`:
 
 ```ts
+const emailId = await mailchimp.sendEmail(ctx, {
+  from_email: "hello@example.com",
+  from_name: "My App",
+  to: [{ email: "user@example.com", name: "Jane" }],
+  subject: "Hello!",
+  html: "<h1>Hello, Jane!</h1>",
+  text: "Hello, Jane!",
+  tags: ["greeting"],
+});
+```
+
+`sendEmail` returns an `EmailId` you can use to check status or cancel the email later.
+
+### Send a template email
+
+Use the `template` field to send with a Mandrill template. Merge variables are
+passed via `globalMergeVars` (apply to all recipients) or `mergeVars`
+(per-recipient):
+
+```ts
+const emailId = await mailchimp.sendEmail(ctx, {
+  from_email: "hello@example.com",
+  to: [{ email: "user@example.com", name: "Jane" }],
+  template: {
+    name: "welcome-template",
+    content: [{ name: "main", content: "<p>Template body</p>" }],
+  },
+  globalMergeVars: [
+    { name: "FNAME", content: "Jane" },
+  ],
+});
+```
+
+### Check email status
+
+Use `status()` to get delivery state and engagement flags, or `get()` to
+retrieve the full email record:
+
+```ts
+// In a query
+const emailStatus = await mailchimp.status(ctx, emailId);
+// → { status: "delivered", bounced: false, complained: false, opened: true, clicked: false, ... }
+
+// Full record
+const email = await mailchimp.get(ctx, emailId);
+```
+
+`status()` returns an `EmailStatus` object with the fields: `status`,
+`errorMessage`, `rejectReason`, `bounced`, `complained`, `opened`, `clicked`.
+
+Possible `status` values: `waiting`, `queued`, `cancelled`, `sent`,
+`delivered`, `bounced`, `rejected`, `failed`.
+
+### Cancel a pending email
+
+Cancel an email that hasn't been sent yet:
+
+```ts
+await mailchimp.cancelEmail(ctx, emailId);
+```
+
+Only emails with `waiting` or `queued` status can be cancelled.
+
+### Handle webhooks
+
+Webhooks let Mandrill push delivery events (bounces, opens, clicks, etc.) back
+to your app.
+
+1. Set the `MANDRILL_WEBHOOK_KEY` environment variable in your Convex dashboard.
+
+2. Register the webhook routes in `convex/http.ts`:
+
+```ts
+// convex/http.ts
 import { httpRouter } from "convex/server";
-import { registerRoutes } from "@fmaplabs/mailchimp";
 import { components } from "./_generated/api";
+import { MailchimpTransactional } from "@fmaplabs/mailchimp";
 
 const http = httpRouter();
 
-registerRoutes(http, components.mailchimp, {
-  pathPrefix: "/comments",
+const mailchimp = new MailchimpTransactional(components.mailchimp);
+
+mailchimp.registerRoutes(http, {
+  path: "/mandrill/webhook", // default path, can be customized
 });
 
 export default http;
 ```
 
-This will expose a GET endpoint that returns the most recent comment as JSON.
-The endpoint requires a `targetId` query parameter. See
-[http.ts](./example/convex/http.ts) for a complete example.
+3. In your Mandrill settings, point the webhook URL to
+   `https://<your-deployment>.convex.site/mandrill/webhook`.
 
-<!-- END: Include on https://convex.dev/components -->
+### React to email events
 
-Run the example:
+Use the `onEmailEvent` option to run a mutation whenever an email event is
+received via webhook:
 
-```sh
-npm i
-npm run dev
+```ts
+// convex/example.ts
+import { internalMutation } from "./_generated/server";
+import { components } from "./_generated/api";
+import { MailchimpTransactional } from "@fmaplabs/mailchimp";
+import { internal } from "./_generated/api";
+import { v } from "convex/values";
+
+const mailchimp = new MailchimpTransactional(components.mailchimp, {
+  onEmailEvent: internal.example.onEmailEvent,
+});
+
+export const onEmailEvent = internalMutation({
+  args: { id: v.string(), event: v.string() },
+  handler: async (_ctx, args) => {
+    console.log(`Email ${args.id} received event: ${args.event}`);
+  },
+});
 ```
+
+The `defineOnEmailEvent` static helper provides type safety for the handler:
+
+```ts
+import { MailchimpTransactional } from "@fmaplabs/mailchimp";
+
+const handler = MailchimpTransactional.defineOnEmailEvent(async (ctx, args) => {
+  // args.id — the internal email ID
+  // args.event — the EventType (e.g. "send", "open", "hard_bounce")
+  console.log(`Email ${args.id}: ${args.event}`);
+});
+```
+
+## Configuration
+
+All options are optional and passed to the `MailchimpTransactional` constructor:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `apiKey` | `string` | `process.env.MANDRILL_API_KEY` | Mandrill API key |
+| `webhookKey` | `string` | `process.env.MANDRILL_WEBHOOK_KEY` | Webhook signing key for signature verification |
+| `initialBackoffMs` | `number` | `30000` | Initial backoff for retrying failed sends |
+| `retryAttempts` | `number` | `5` | Number of retry attempts for failed sends |
+| `onEmailEvent` | `FunctionReference<"mutation", "internal">` | — | Internal mutation called on webhook events |
+
+## API Reference
+
+### `MailchimpTransactional` methods
+
+| Method | Description |
+|---|---|
+| `sendEmail(ctx, options)` | Send an email. Returns `EmailId`. |
+| `sendEmailManually(ctx, options, callback)` | Create an email record and send via a custom callback. Returns `EmailId`. |
+| `cancelEmail(ctx, emailId)` | Cancel a pending email. |
+| `status(ctx, emailId)` | Get delivery status and engagement flags. Returns `EmailStatus \| null`. |
+| `get(ctx, emailId)` | Get the full email record. |
+| `registerRoutes(http, { path? })` | Register webhook HTTP routes on a router. |
+| `handleMandrillWebhook(ctx, req)` | Manually handle a webhook request. Returns `Response`. |
+| `defineOnEmailEvent(handler)` | Static. Type helper for email event callback handlers. |
+
+### Exported types
+
+`MailchimpTransactional`, `MailchimpTransactionalOptions`, `SendEmailOptions`,
+`EmailId`, `EmailStatus`, `Recipient`, `Template`, `MergeVar`,
+`RecipientMergeVar`, `Status`, `EventType`
+
+## License
+
+[MIT](./LICENSE)
+
+Found a bug? Feature request? [File it here](https://github.com/fmaplabs/mailchimp/issues).
