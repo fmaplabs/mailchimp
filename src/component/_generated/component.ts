@@ -139,6 +139,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           eventType:
             | "send"
+            | "delivered"
             | "deferral"
             | "hard_bounce"
             | "soft_bounce"

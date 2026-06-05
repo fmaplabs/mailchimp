@@ -162,7 +162,7 @@ function computeEmailUpdateFromEvent(
 
   switch (eventType) {
     case "send":
-      // Mandrill "send" = accepted by receiving server
+    case "delivered":
       if (canUpgradeTo("delivered")) {
         return { status: "delivered" as const, finalizedAt: Date.now() };
       }

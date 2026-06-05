@@ -62,6 +62,7 @@ export type RuntimeConfig = Infer<typeof vOptions>;
 
 export const vEventType = v.union(
   v.literal("send"),
+  v.literal("delivered"),
   v.literal("deferral"),
   v.literal("hard_bounce"),
   v.literal("soft_bounce"),
