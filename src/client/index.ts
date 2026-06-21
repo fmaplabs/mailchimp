@@ -1,4 +1,8 @@
-import { httpActionGeneric, type FunctionReference } from "convex/server";
+import {
+  createFunctionHandle,
+  httpActionGeneric,
+  type FunctionReference,
+} from "convex/server";
 import type {
   GenericActionCtx,
   GenericDataModel,
@@ -105,18 +109,12 @@ export class MailchimpTransactional {
     this.onEmailEventRef = options?.onEmailEvent;
   }
 
-  private async getRuntimeConfig(ctx: RunMutationCtx): Promise<RuntimeConfig> {
+  private async getRuntimeConfig(): Promise<RuntimeConfig> {
     if (this.cachedRuntimeConfig) return this.cachedRuntimeConfig;
 
     let onEmailEvent: { fnHandle: string } | undefined;
     if (this.onEmailEventRef) {
-      const handle = await (
-        ctx as unknown as {
-          getFunctionHandle: (
-            ref: FunctionReference<"mutation", "internal">,
-          ) => Promise<string>;
-        }
-      ).getFunctionHandle(this.onEmailEventRef);
+      const handle = await createFunctionHandle(this.onEmailEventRef);
       onEmailEvent = { fnHandle: handle };
     }
 
@@ -139,7 +137,7 @@ export class MailchimpTransactional {
       );
     }
 
-    const runtimeConfig = await this.getRuntimeConfig(ctx);
+    const runtimeConfig = await this.getRuntimeConfig();
 
     const id = await ctx.runMutation(this.component.lib.sendEmail, {
       options: runtimeConfig,
